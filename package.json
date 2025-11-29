@@ -1,35 +1,36 @@
 {
-  "name": "rosy-modas-app",
+  "name": "loja-online-api",
   "version": "1.0.0",
-  "private": true,
-  "type": "module",
+  "description": "API de E-commerce com Mercado Pago, Cloudinary e MySQL",
+  "main": "server.js",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "start": "node backend/src/server.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
+  "keywords": [
+    "nodejs",
+    "express",
+    "ecommerce",
+    "mercadopago"
+  ],
+  "author": "Seu Nome",
+  "license": "ISC",
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "@google/genai": "*",
-    "lucide-react": "^0.344.0",
-    "axios": "^1.6.7",
-    "express": "^4.19.2",
+    "bcryptjs": "^2.4.3",
+    "cloudinary": "^1.41.0",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "mysql2": "^3.9.2",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
-    "bcryptjs": "^2.4.3"
+    "mercadopago": "^2.0.1",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "multer-storage-cloudinary": "^4.0.0",
+    "mysql2": "^3.6.5",
+    "sequelize": "^6.35.1"
   },
   "devDependencies": {
-    "@types/react": "^18.2.66",
-    "@types/react-dom": "^18.2.22",
-    "@vitejs/plugin-react": "^4.2.1",
-    "autoprefixer": "^10.4.18",
-    "postcss": "^8.4.35",
-    "tailwindcss": "^3.4.1",
-    "typescript": "^5.2.2",
-    "vite": "^5.1.4"
+    "nodemon": "^3.0.1"
   }
 }
