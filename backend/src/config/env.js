@@ -13,7 +13,10 @@ export const config = {
     database: process.env.DB_NAME,
     waitForConnections: true,
     connectionLimit: 10,
-    queueLimit: 0
+    queueLimit: 0,
+    ssl: {
+      rejectUnauthorized: false
+    }
   },
   jwtSecret: process.env.JWT_SECRET || 'fallback_secret',
   internalApiKey: process.env.INTERNAL_API_KEY,
