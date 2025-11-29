@@ -2,7 +2,7 @@ const { User, Product, Order, ShippingRate, Address, DeliveryCity, ProductImage,
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const MercadoPago = require('mercadopago');
-const { sequelize } = require('./db'); // Importa sequelize para transações
+const { sequelize } = require('./db'); 
 
 // Config Mercado Pago
 const client = new MercadoPago.MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
@@ -36,11 +36,11 @@ const controllers = {
         } catch (error) { res.status(500).json({ error: error.message }); }
     },
 
-    // --- 2. PRODUTOS COMPLETOS (COM VARIAÇÕES E IMAGENS) ---
+    // --- 2. PRODUTOS ---
     createProduct: async (req, res) => {
-        const t = await sequelize.transaction(); // Inicia transação
+        const t = await sequelize.transaction();
         try {
-            const uploadedFiles = req.files; // Array de imagens vindo do Multer
+            const uploadedFiles = req.files; 
             const { title, basePrice, description, categories, tags, variations } = req.body;
 
             if (!uploadedFiles || uploadedFiles.length === 0) {
@@ -48,14 +48,8 @@ const controllers = {
                 return res.status(400).json({ message: "É necessário enviar pelo menos uma imagem." });
             }
 
-            // A. Cria o Produto Base
-            const product = await Product.create({
-                title,
-                basePrice,
-                description,
-            }, { transaction: t });
+            const product = await Product.create({ title, basePrice, description }, { transaction: t });
 
-            // B. Cria e Associa Imagens
             const imageRecords = uploadedFiles.map((file, index) => ({
                 url: file.path,
                 isPrimary: index === 0,
@@ -63,18 +57,16 @@ const controllers = {
             }));
             await ProductImage.bulkCreate(imageRecords, { transaction: t });
 
-            // C. Cria e Associa Variações (SKUs)
             const variationData = JSON.parse(variations || '[]');
             const variationRecords = variationData.map(v => ({
                 ProductId: product.id,
                 sku: v.sku,
                 stock: parseInt(v.stock) || 0,
                 price: parseFloat(v.price) || 0,
-                attributes: v.attributes, // JSON
+                attributes: v.attributes,
             }));
             await Variation.bulkCreate(variationRecords, { transaction: t });
 
-            // D. Cria e Associa Categorias
             if (categories) {
                 const categoryNames = categories.split(',').map(c => c.trim()).filter(c => c);
                 const categoryPromises = categoryNames.map(name => 
@@ -85,85 +77,58 @@ const controllers = {
                 await product.setCategories(categoryInstances, { transaction: t });
             }
 
-            // E. Cria e Associa Tags
             if (tags) {
                 const tagNames = tags.split(',').map(tg => tg.trim()).filter(tg => tg);
-                const tagPromises = tagNames.map(name => 
-                    Tag.findOrCreate({ where: { name: name }, transaction: t })
-                );
+                const tagPromises = tagNames.map(name => Tag.findOrCreate({ where: { name: name }, transaction: t }));
                 const tagResults = await Promise.all(tagPromises);
                 const tagInstances = tagResults.map(r => r[0]);
                 await product.setTags(tagInstances, { transaction: t });
             }
 
-            await t.commit(); // Confirma
-            res.status(201).json({ message: "Produto completo criado com sucesso!", productId: product.id });
+            await t.commit();
+            res.status(201).json({ message: "Produto criado!", productId: product.id });
 
         } catch (error) {
-            await t.rollback(); // Desfaz erro
+            await t.rollback();
             console.error("Erro ao criar produto:", error);
-            res.status(500).json({ error: "Falha ao criar produto. Detalhes: " + error.message });
+            res.status(500).json({ error: error.message });
         }
     },
 
     listProducts: async (req, res) => {
         try {
-            const products = await Product.findAll({ 
-                include: [ProductImage, Variation, Category, Tag],
-                order: [['id', 'DESC']] 
-            });
+            const products = await Product.findAll({ include: [ProductImage, Variation, Category, Tag], order: [['id', 'DESC']] });
             res.json(products);
-        } catch (error) {
-            res.status(500).json({ error: error.message });
-        }
+        } catch (error) { res.status(500).json({ error: error.message }); }
     },
     
     getProductById: async (req, res) => {
         try {
-            const product = await Product.findByPk(req.params.id, {
-                 include: [ProductImage, Variation, Category, Tag]
-            });
-            if (!product) {
-                return res.status(404).json({ message: "Produto não encontrado." });
-            }
+            const product = await Product.findByPk(req.params.id, { include: [ProductImage, Variation, Category, Tag] });
+            if (!product) return res.status(404).json({ message: "Produto não encontrado." });
             res.json(product);
-        } catch (error) {
-            res.status(500).json({ error: error.message });
-        }
+        } catch (error) { res.status(500).json({ error: error.message }); }
     },
 
-    // --- 3. CIDADES DE ENTREGA ---
+    // --- 3. CIDADES E FRETE ---
     addDeliveryCity: async (req, res) => {
         try {
             const { city, state, neighborhood } = req.body;
-            const newCity = await DeliveryCity.create({ 
-                city: city.toUpperCase(), 
-                state: state.toUpperCase(),
-                neighborhood: neighborhood ? neighborhood.toUpperCase() : null
-            });
+            const newCity = await DeliveryCity.create({ city: city.toUpperCase(), state: state.toUpperCase(), neighborhood: neighborhood ? neighborhood.toUpperCase() : null });
             res.status(201).json(newCity);
         } catch (error) {
-            if (error.original && error.original.code === 'ER_DUP_ENTRY') {
-                return res.status(400).json({ message: "Esta Cidade/Bairro já foi cadastrada." });
-            }
+            if (error.original && error.original.code === 'ER_DUP_ENTRY') return res.status(400).json({ message: "Cidade já cadastrada." });
             res.status(500).json({ error: error.message });
         }
     },
 
     getAvailableCities: async (req, res) => {
         try {
-            const cities = await DeliveryCity.findAll({
-                where: { available: true },
-                attributes: ['id', 'city', 'state', 'neighborhood'],
-                order: [['state', 'ASC'], ['city', 'ASC']]
-            });
+            const cities = await DeliveryCity.findAll({ where: { available: true }, attributes: ['id', 'city', 'state', 'neighborhood'], order: [['state', 'ASC'], ['city', 'ASC']] });
             res.json(cities);
-        } catch (error) {
-            res.status(500).json({ error: error.message });
-        }
+        } catch (error) { res.status(500).json({ error: error.message }); }
     },
 
-    // --- 4. FRETE ---
     addShippingRate: async (req, res) => {
         try {
             const { city, price } = req.body;
@@ -174,66 +139,68 @@ const controllers = {
 
     calculateShipping: async (req, res) => {
         const city = req.query.city ? req.query.city.toUpperCase() : null;
-        if (!city) return res.status(400).json({ message: "Cidade é obrigatória para calcular o frete." });
-        
-        const rate = await ShippingRate.findOne({ 
-            where: { city: city, active: true } 
-        });
-        
-        const price = rate ? parseFloat(rate.price) : 'Consulte';
-        res.json({ city: req.query.city, price: price });
+        if (!city) return res.status(400).json({ message: "Cidade obrigatória." });
+        const rate = await ShippingRate.findOne({ where: { city: city, active: true } });
+        res.json({ city: req.query.city, price: rate ? parseFloat(rate.price) : 'Consulte' });
     },
 
-    // --- 5. CHECKOUT (MERCADO PAGO) ---
+    // --- 5. CHECKOUT (PIX TRANSPARENTE) ---
     createPreference: async (req, res) => {
         try {
             const userId = req.user.id; 
             const { items, city, delivery_address, contact } = req.body; 
             
-            // Calcular Frete
+            // 1. Calcular Frete
             const shipping = await ShippingRate.findOne({ where: { city: city.toUpperCase() } });
             const shippingCost = shipping ? parseFloat(shipping.price) : 0;
 
-            // Preparar Itens
-            const mpItems = items.map(item => ({
-                title: item.title,
-                quantity: parseInt(item.quantity),
-                unit_price: parseFloat(item.price),
-                currency_id: 'BRL'
-            }));
+            // 2. Calcular Total
+            let productsTotal = 0;
+            items.forEach(item => {
+                productsTotal += parseFloat(item.price) * parseInt(item.quantity);
+            });
+            const totalAmount = productsTotal + shippingCost;
+
+            // 3. Criar PAGAMENTO PIX (V1/Payments) ao invés de Preferência
+            const payment = new MercadoPago.Payment(client);
             
-            // Criar Preferência MP
-            const preferenceInstance = new MercadoPago.Preference(client);
-            
-            const result = await preferenceInstance.create({
+            const result = await payment.create({
                 body: {
-                    items: mpItems,
-                    shipments: {
-                        cost: shippingCost,
-                        mode: 'not_specified'
+                    transaction_amount: totalAmount,
+                    description: `Pedido na Loja - ${contact.email}`,
+                    payment_method_id: 'pix',
+                    payer: {
+                        email: contact.email, // Obrigatório para Pix
+                        first_name: contact.email.split('@')[0],
+                        entity_type: 'individual',
+                        identification: {
+                            type: 'CPF',
+                            number: '19119119100' // Em produção, peça o CPF no checkout!
+                        }
                     },
-                    back_urls: {
-                        success: `${process.env.FRONTEND_URL}/success.php`,
-                        failure: `${process.env.FRONTEND_URL}/failure.php`,
-                        pending: `${process.env.FRONTEND_URL}/pending.php`
-                    },
-                    auto_return: "approved",
-                    external_reference: `ORDER-${Date.now()}`
+                    notification_url: `${process.env.FRONTEND_URL}/api/webhook` // Para receber status depois
                 }
             });
 
+            // Extrai dados do QR Code da resposta do MP
+            const pointOfInteraction = result.point_of_interaction;
+            const transactionData = pointOfInteraction.transaction_data;
+
             res.json({ 
                 id: result.id, 
-                init_point: result.init_point,
-                shippingCost: shippingCost
+                status: result.status,
+                qr_code: transactionData.qr_code,              // Copia e Cola
+                qr_code_base64: transactionData.qr_code_base64, // Imagem
+                shippingCost: shippingCost,
+                totalAmount: totalAmount
             });
+
         } catch (error) {
-            console.error("Erro ao criar pagamento MP:", error);
-            res.status(500).json({ error: "Falha ao iniciar o checkout." });
+            console.error("Erro ao criar Pix:", error);
+            res.status(500).json({ error: "Falha ao gerar Pix. Verifique os dados." });
         }
     },
 
-    // --- 6. ESTATÍSTICAS ---
     getStats: async (req, res) => {
         const userCount = await User.count();
         const orderCount = await Order.count();
