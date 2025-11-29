@@ -1,6 +1,7 @@
 import { Product } from '../types';
 
-const API_URL = 'https://lojaderopasfeminina.onrender.com/api';
+// Use relative path since backend serves frontend
+const API_URL = '/api';
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem('rosy_token');

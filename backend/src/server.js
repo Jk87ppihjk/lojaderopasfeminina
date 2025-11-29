@@ -1,19 +1,28 @@
 import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { config } from './config/env.js';
 import { pool, checkConnection } from './config/database.js';
 import routes from './routes.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
 
 // Middleware
-// Use config.frontendUrl or allow all ('*') to prevent CORS errors during dev/deploy mismatches
-app.use(cors({ origin: config.frontendUrl || '*' }));
+app.use(cors()); // Allow all origins since we serve static files from same origin now
 app.use(express.json());
 
-// Routes
+// API Routes
 app.use('/api', routes);
+
+// Serve Static Files (React Build)
+// Go up two levels from backend/src to find dist
+const distPath = path.join(__dirname, '../../dist');
+app.use(express.static(distPath));
 
 // Database Initialization & Admin Seed
 const initDb = async () => {
@@ -51,6 +60,11 @@ const initDb = async () => {
     connection.release();
   }
 };
+
+// Catch-all route to serve React App for non-API requests
+app.get('*', (req, res) => {
+  res.sendFile(path.join(distPath, 'index.html'));
+});
 
 // Start
 app.listen(config.port, async () => {
