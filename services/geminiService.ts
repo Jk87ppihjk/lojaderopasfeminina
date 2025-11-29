@@ -1,23 +1,32 @@
 import { GoogleGenAI, Chat, GenerateContentResponse } from "@google/genai";
-import { SYSTEM_INSTRUCTION, PRODUCTS } from '../constants';
+import { SYSTEM_INSTRUCTION } from '../constants';
+import { Product } from '../types';
 
 const apiKey = process.env.API_KEY || '';
 
 class GeminiService {
   private ai: GoogleGenAI;
   private chatSession: Chat | null = null;
+  private products: Product[] = [];
 
   constructor() {
-    // Initialize with API Key from environment
     this.ai = new GoogleGenAI({ apiKey });
+  }
+
+  public setProducts(products: Product[]) {
+    this.products = products;
+    // Reset chat session when products update to include new context
+    this.chatSession = null;
   }
 
   public async startChat(): Promise<void> {
     try {
       // Prepare context about products for the AI
-      const productContext = PRODUCTS.map(p => 
-        `- ${p.name} (${p.category}): R$ ${p.price.toFixed(2)}. Detalhes: ${p.description}`
-      ).join('\n');
+      const productContext = this.products.length > 0 
+        ? this.products.map(p => 
+            `- ${p.name} (${p.category}): R$ ${p.price.toFixed(2)}. Detalhes: ${p.description}`
+          ).join('\n')
+        : "O catálogo está temporariamente indisponível.";
 
       const fullSystemInstruction = `${SYSTEM_INSTRUCTION}\n\nCatálogo Atual:\n${productContext}`;
 
@@ -48,7 +57,9 @@ class GeminiService {
       return response.text || "Não consegui entender, pode reformular?";
     } catch (error) {
       console.error("Error sending message to Gemini:", error);
-      return "Ocorreu um erro momentâneo. Por favor, tente novamente.";
+      // Retry once if session is stale
+      this.chatSession = null;
+      return "Tive um pequeno lapso, por favor tente perguntar novamente.";
     }
   }
 }
