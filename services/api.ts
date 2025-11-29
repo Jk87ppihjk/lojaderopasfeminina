@@ -7,26 +7,47 @@ const getAuthHeaders = () => {
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
+// Helper para timeout
+const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout = 60000) => {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+};
+
 export const api = {
   async login(email: string, password: string): Promise<any> {
-    const response = await fetch(`${API_URL}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    if (!response.ok) throw new Error('Falha no login');
-    return response.json();
+    try {
+      const response = await fetchWithTimeout(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Falha no login');
+      }
+      return response.json();
+    } catch (error) {
+      console.error("Login Error:", error);
+      throw error;
+    }
   },
 
   async getProducts(): Promise<Product[]> {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-      const response = await fetch(`${API_URL}/products`, {
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
+      const response = await fetchWithTimeout(`${API_URL}/products`);
 
       if (!response.ok) throw new Error('Failed to fetch products');
       const data = await response.json();
@@ -43,13 +64,13 @@ export const api = {
         stock: item.stock
       }));
     } catch (error) {
-      console.warn('API Fetch Error:', error);
+      console.warn('API Fetch Error (possivelmente servidor offline ou acordando):', error);
       return [];
     }
   },
 
   async createProduct(productData: any) {
-    const response = await fetch(`${API_URL}/products`, {
+    const response = await fetchWithTimeout(`${API_URL}/products`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -62,7 +83,7 @@ export const api = {
   },
 
   async updateProduct(id: number, productData: any) {
-    const response = await fetch(`${API_URL}/products/${id}`, {
+    const response = await fetchWithTimeout(`${API_URL}/products/${id}`, {
       method: 'PUT',
       headers: { 
         'Content-Type': 'application/json',
@@ -75,7 +96,7 @@ export const api = {
   },
 
   async deleteProduct(id: number) {
-    const response = await fetch(`${API_URL}/products/${id}`, {
+    const response = await fetchWithTimeout(`${API_URL}/products/${id}`, {
       method: 'DELETE',
       headers: { ...getAuthHeaders() },
     });
@@ -96,7 +117,7 @@ export const api = {
       }))
     };
 
-    const response = await fetch(`${API_URL}/checkout`, {
+    const response = await fetchWithTimeout(`${API_URL}/checkout`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

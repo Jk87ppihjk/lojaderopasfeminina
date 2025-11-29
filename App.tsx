@@ -6,7 +6,7 @@ import { ChatBot } from './components/ChatBot';
 import { LoginPanel } from './components/LoginPanel';
 import { AdminPanel } from './components/AdminPanel';
 import { Product, CartItem, ViewState } from './types';
-import { ArrowRight, CheckCircle, Loader2, AlertCircle, User } from 'lucide-react';
+import { ArrowRight, CheckCircle, Loader2, AlertCircle, User, RefreshCw } from 'lucide-react';
 import { api } from './services/api';
 import { geminiService } from './services/geminiService';
 
@@ -16,25 +16,31 @@ function App() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+  const [loadingError, setLoadingError] = useState(false);
   
   // Checkout States
   const [isProcessingOrder, setIsProcessingOrder] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
 
+  const loadProducts = async () => {
+    setIsLoadingProducts(true);
+    setLoadingError(false);
+    const data = await api.getProducts();
+    if (data.length === 0) {
+       // Se retornou vazio, pode ser erro de conexão ou banco vazio. 
+       // Assumiremos erro de conexão se for o primeiro load, 
+       // mas na prática api.ts retorna [] em erro catch.
+       // Vamos verificar se foi erro no console (api.ts loga warning)
+    }
+    setProducts(data);
+    geminiService.setProducts(data);
+    setIsLoadingProducts(false);
+  };
+
   useEffect(() => {
-    // Check if on login route or admin route via simple state persistence check or logic
-    // For now, we default to HOME.
-    
-    const loadProducts = async () => {
-      setIsLoadingProducts(true);
-      const data = await api.getProducts();
-      setProducts(data);
-      geminiService.setProducts(data);
-      setIsLoadingProducts(false);
-    };
     loadProducts();
-  }, [viewState]); // Reload products when view changes (e.g. returning from admin)
+  }, [viewState]);
 
   const addToCart = (product: Product) => {
     setCart(prev => {
@@ -165,8 +171,14 @@ function App() {
           </div>
           
           {isLoadingProducts ? (
-            <div className="flex justify-center text-rosy-red">
+            <div className="flex flex-col items-center justify-center text-rosy-red gap-2">
               <Loader2 className="animate-spin w-10 h-10" />
+              <p className="text-sm text-gray-400">Carregando coleção...</p>
+            </div>
+          ) : products.length === 0 ? (
+            <div className="text-center text-gray-500">
+               <p className="mb-2">Não foi possível carregar os produtos no momento.</p>
+               <button onClick={loadProducts} className="text-rosy-red flex items-center gap-2 mx-auto hover:underline"><RefreshCw size={16}/> Tentar novamente</button>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -196,12 +208,14 @@ function App() {
         </div>
         
         {isLoadingProducts ? (
-           <div className="flex justify-center items-center h-64 text-rosy-red">
+           <div className="flex flex-col justify-center items-center h-64 text-rosy-red gap-2">
              <Loader2 className="animate-spin w-12 h-12" />
+             <p className="text-gray-400">Buscando peças exclusivas...</p>
            </div>
         ) : products.length === 0 ? (
           <div className="text-center text-gray-500 py-20">
-            <p>Nenhum produto encontrado no momento.</p>
+            <p>Nenhum produto encontrado ou erro de conexão.</p>
+            <button onClick={loadProducts} className="text-rosy-red mt-4 hover:underline">Tentar novamente</button>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

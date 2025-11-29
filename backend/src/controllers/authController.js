@@ -10,6 +10,7 @@ export const login = async (req, res) => {
     const [users] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
     
     if (users.length === 0) {
+      console.log(`⚠️ Login falhou: Usuário não encontrado para email ${email}`);
       return res.status(401).json({ message: 'Credenciais inválidas' });
     }
 
@@ -17,6 +18,7 @@ export const login = async (req, res) => {
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
+      console.log(`⚠️ Login falhou: Senha incorreta para usuário ${email}`);
       return res.status(401).json({ message: 'Credenciais inválidas' });
     }
 
@@ -26,6 +28,7 @@ export const login = async (req, res) => {
       { expiresIn: '24h' }
     );
 
+    console.log(`✅ Login com sucesso para ${email}`);
     res.json({
       message: 'Login realizado com sucesso',
       token,
@@ -33,7 +36,7 @@ export const login = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
+    console.error('❌ Erro no servidor durante login:', error);
     res.status(500).json({ error: 'Erro no servidor durante login' });
   }
 };

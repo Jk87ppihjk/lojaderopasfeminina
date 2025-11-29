@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShoppingBag, Menu, X, Heart } from 'lucide-react';
+import { ShoppingBag, Menu, X, Heart, User } from 'lucide-react';
 import { ViewState } from '../types';
 
 interface HeaderProps {
@@ -66,6 +66,12 @@ export const Header: React.FC<HeaderProps> = ({ cartItemCount, toggleCart, setVi
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
             <button onClick={() => {setViewState(ViewState.HOME); setIsMenuOpen(false);}} className="text-gray-300 hover:text-rosy-red block px-3 py-2 text-base font-medium w-full text-left">Início</button>
             <button onClick={() => {setViewState(ViewState.CATALOG); setIsMenuOpen(false);}} className="text-gray-300 hover:text-rosy-red block px-3 py-2 text-base font-medium w-full text-left">Coleção</button>
+            <button 
+              onClick={() => {setViewState(ViewState.LOGIN); setIsMenuOpen(false);}} 
+              className="text-gray-300 hover:text-rosy-red block px-3 py-2 text-base font-medium w-full text-left flex items-center gap-2 border-t border-rosy-dark mt-2 pt-3"
+            >
+               <User size={18} /> Área do Lojista
+            </button>
           </div>
         </div>
       )}

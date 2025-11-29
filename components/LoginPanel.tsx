@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, User, AlertCircle } from 'lucide-react';
+import { Lock, User, AlertCircle, Loader2 } from 'lucide-react';
 import { api } from '../services/api';
 import { ViewState } from '../types';
 
@@ -24,8 +24,9 @@ export const LoginPanel: React.FC<LoginPanelProps> = ({ onLoginSuccess, setViewS
       localStorage.setItem('rosy_token', data.token);
       localStorage.setItem('rosy_user', JSON.stringify(data.user));
       onLoginSuccess();
-    } catch (err) {
-      setError('Credenciais inválidas. Tente novamente.');
+    } catch (err: any) {
+      console.error(err);
+      setError('Credenciais inválidas ou erro de conexão.');
     } finally {
       setIsLoading(false);
     }
@@ -40,7 +41,7 @@ export const LoginPanel: React.FC<LoginPanelProps> = ({ onLoginSuccess, setViewS
         </div>
 
         {error && (
-          <div className="bg-red-900/50 border border-rosy-red text-white p-3 rounded mb-6 flex items-center gap-2 text-sm">
+          <div className="bg-red-900/50 border border-rosy-red text-white p-3 rounded mb-6 flex items-center gap-2 text-sm animate-pulse">
             <AlertCircle size={16} />
             {error}
           </div>
@@ -84,9 +85,13 @@ export const LoginPanel: React.FC<LoginPanelProps> = ({ onLoginSuccess, setViewS
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-rosy-red hover:bg-red-700 text-white font-bold py-3 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-rosy-red hover:bg-red-700 text-white font-bold py-3 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
           >
-            {isLoading ? 'Entrando...' : 'Acessar Painel'}
+            {isLoading ? (
+              <>
+                <Loader2 size={20} className="animate-spin" /> Entrando...
+              </>
+            ) : 'Acessar Painel'}
           </button>
         </form>
 
