@@ -70,7 +70,7 @@ const controllers = {
         }
     },
 
-    // --- CIDADES DE ENTREGA (ADMIN) ---
+    // --- CIDADES DE ENTREGA ---
     addDeliveryCity: async (req, res) => {
         try {
             const { city, state, neighborhood } = req.body;
@@ -88,12 +88,11 @@ const controllers = {
         }
     },
 
-    // --- CIDADES DE ENTREGA (PÚBLICO) ---
     getAvailableCities: async (req, res) => {
         try {
             const cities = await DeliveryCity.findAll({
                 where: { available: true },
-                attributes: ['city', 'state', 'neighborhood'],
+                attributes: ['id', 'city', 'state', 'neighborhood'],
                 order: [['state', 'ASC'], ['city', 'ASC']]
             });
             res.json(cities);
@@ -102,7 +101,7 @@ const controllers = {
         }
     },
 
-    // --- FRETE E ENDEREÇO (ADMIN) ---
+    // --- FRETE ---
     addShippingRate: async (req, res) => {
         try {
             const { city, price } = req.body;
@@ -127,7 +126,9 @@ const controllers = {
     createPreference: async (req, res) => {
         try {
             const userId = req.user.id; 
-            const { items, city } = req.body; 
+            
+            // NOVO: Recebe o endereço e contato completo do Frontend
+            const { items, city, delivery_address, contact } = req.body; 
             
             // 1. CALCULAR FRETE
             const shipping = await ShippingRate.findOne({ where: { city: city.toUpperCase() } });
@@ -141,7 +142,15 @@ const controllers = {
                 currency_id: 'BRL'
             }));
             
-            // 3. CRIAR PREFERÊNCIA DE PAGAMENTO
+            /* // 3. REGISTRO DO PEDIDO (PRÓXIMA ETAPA!)
+            // Aqui você usaria delivery_address e contact para:
+            // a) Criar um novo Address no DB.
+            // b) Criar uma nova Order no DB, vinculando o userId, AddressId e o status 'pending'.
+            // c) Adicionar delivery_address e contact como JSON na Order para registro completo.
+            console.log("DADOS DE ENDEREÇO RECEBIDOS (Pronto para salvar no DB):", delivery_address, contact);
+            */
+
+            // 4. CRIAR PREFERÊNCIA DE PAGAMENTO MP
             const preferenceInstance = new MercadoPago.Preference(client);
             
             const result = await preferenceInstance.create({
