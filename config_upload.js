@@ -12,11 +12,13 @@ cloudinary.config({
 const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
-        folder: 'loja_uploads',
+        folder: 'loja_products', // Pasta específica para produtos
         allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
+        transformation: [{ width: 800, height: 800, crop: "limit" }] // Otimização de tamanho
     },
 });
 
+// Middleware configurado para aceitar um ARRAY de arquivos (campo 'images', máximo 10)
 const upload = multer({ storage: storage });
 
 module.exports = upload;
