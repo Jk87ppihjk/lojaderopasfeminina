@@ -25,17 +25,21 @@ app.post('/api/login', controllers.login);
 
 // 2. Produtos (Listagem é Pública, Criação é Admin)
 app.get('/api/products', controllers.listProducts);
-app.get('/api/products/:id', controllers.getProductById); // NOVO: Busca por ID
+app.get('/api/products/:id', controllers.getProductById);
 app.post('/api/products', verifyAdmin, upload.single('image'), controllers.createProduct);
 
-// 3. Fretes (Admin cadastra, Usuário consulta)
+// 3. Cidades de Entrega (Rotas Nova)
+app.get('/api/public/delivery/cities', controllers.getAvailableCities); // Pública
+app.post('/api/admin/delivery/city', verifyAdmin, controllers.addDeliveryCity); // Admin
+
+// 4. Fretes (Admin cadastra, Usuário consulta)
 app.post('/api/shipping/add', verifyAdmin, controllers.addShippingRate);
 app.get('/api/shipping/calc', controllers.calculateShipping);
 
-// 4. Carrinho e Pagamento (Requer Token do Usuário logado)
+// 5. Carrinho e Pagamento (Requer Token do Usuário logado)
 app.post('/api/checkout', verifyToken, controllers.createPreference);
 
-// 5. Admin Dashboard (Requer Token de Admin)
+// 6. Admin Dashboard (Requer Token de Admin)
 app.get('/api/admin/stats', verifyAdmin, controllers.getStats);
 
 // Rota padrão
