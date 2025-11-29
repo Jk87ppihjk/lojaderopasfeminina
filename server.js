@@ -3,44 +3,61 @@ const cors = require('cors');
 const morgan = require('morgan');
 require('dotenv').config();
 
-// Importação dos Módulos Locais
+// Importação dos Módulos Locais (Todos na raiz)
 const { verifyToken, verifyAdmin } = require('./middleware_auth');
 const upload = require('./config_upload');
 const controllers = require('./controllers');
 const { sequelize } = require('./db'); // Importa o sequelize explicitamente
-const seedAdmin = require('./seed_admin'); // <--- IMPORTAÇÃO DO SEED
+const seedAdmin = require('./seed_admin'); // Lógica de criação do Admin
 
 const app = express();
 
+// Middlewares Globais
 app.use(cors());
-app.use(express.json());
-app.use(morgan('dev'));
+app.use(express.json()); // Habilita o bodyParser para JSON
+app.use(morgan('dev')); // Logs de requisição
 
 // --- ROTAS DA API ---
+
+// 1. Autenticação (Público)
 app.post('/api/register', controllers.register);
 app.post('/api/login', controllers.login);
+
+// 2. Produtos (Listagem é Pública, Criação é Admin)
 app.get('/api/products', controllers.listProducts);
+app.get('/api/products/:id', controllers.getProductById); // NOVO: Busca por ID
 app.post('/api/products', verifyAdmin, upload.single('image'), controllers.createProduct);
-app.post('/api/checkout', verifyToken, controllers.createPreference);
+
+// 3. Fretes (Admin cadastra, Usuário consulta)
 app.post('/api/shipping/add', verifyAdmin, controllers.addShippingRate);
 app.get('/api/shipping/calc', controllers.calculateShipping);
+
+// 4. Carrinho e Pagamento (Requer Token do Usuário logado)
+app.post('/api/checkout', verifyToken, controllers.createPreference);
+
+// 5. Admin Dashboard (Requer Token de Admin)
 app.get('/api/admin/stats', verifyAdmin, controllers.getStats);
 
+// Rota padrão
 app.get('/', (req, res) => {
-    res.send('API Loja Online Rodando 🚀');
+    res.send('API Loja Online Rodando. Status OK.');
 });
 
+// --- INICIAR SERVIDOR ---
 const PORT = process.env.PORT || 3000;
 
-// Inicia o servidor APENAS após o banco estar pronto e o Admin verificado
+// Sincroniza o DB, cria o Admin e então inicia o servidor
 sequelize.sync().then(async () => {
-    console.log("📦 Banco de Dados Conectado!");
+    console.log("📦 Banco de Dados Conectado e Sincronizado!");
     
-    // Roda a criação do Admin
+    // Roda a verificação/criação do Admin
     await seedAdmin(); 
 
     app.listen(PORT, () => {
         console.log(`🔥 Servidor rodando na porta ${PORT}`);
         console.log(`🔗 Frontend esperado em: ${process.env.FRONTEND_URL}`);
     });
+}).catch(err => {
+    console.error("❌ Falha crítica ao conectar ao DB:", err);
+    process.exit(1); // Encerra o processo se o DB falhar
 });
