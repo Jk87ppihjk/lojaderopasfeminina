@@ -9,118 +9,89 @@ const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, proces
     pool: { max: 5, min: 0, acquire: 30000, idle: 10000 }
 });
 
-// --- MODELS CORE ---
+// --- MODELS BASE ---
 
-// 1. Produtos (Modelo Principal - Contém apenas metadados)
+const User = sequelize.define('User', { /* ... (campos permanecem) ... */ });
+const Address = sequelize.define('Address', { /* ... (campos permanecem) ... */ });
+const ShippingRate = sequelize.define('ShippingRate', { /* ... (campos permanecem) ... */ });
+const DeliveryCity = sequelize.define('DeliveryCity', { /* ... (campos permanecem) ... */ });
+const Order = sequelize.define('Order', { /* ... (campos permanecem) ... */ });
+
+// --- MODELS DE PRODUTO REVISADOS ---
+
+// Produto Base
 const Product = sequelize.define('Product', {
     title: { type: DataTypes.STRING, allowNull: false },
     description: { type: DataTypes.TEXT },
-    basePrice: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0.00 },
-    isPublished: { type: DataTypes.BOOLEAN, defaultValue: false }
+    basePrice: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+    // basePrice é o preço base antes das variações
 });
 
-// 2. Imagens do Produto (1:N com Produto)
+// Imagens do Produto (Múltiplas)
 const ProductImage = sequelize.define('ProductImage', {
     url: { type: DataTypes.STRING, allowNull: false },
-    isPrimary: { type: DataTypes.BOOLEAN, defaultValue: false },
-    productId: { type: DataTypes.INTEGER, allowNull: false }
+    isPrimary: { type: DataTypes.BOOLEAN, defaultValue: false }
 });
 
-// 3. Categorias
+// Variações (SKUs)
+const Variation = sequelize.define('Variation', {
+    sku: { type: DataTypes.STRING, allowNull: false, unique: true },
+    stock: { type: DataTypes.INTEGER, defaultValue: 0 },
+    // Preço que SOBRESCEVE o basePrice (pode ser 0 para usar o basePrice)
+    price: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
+    // Combinação dos atributos (ex: {"Cor": "Vermelho", "Tamanho": "P"})
+    attributes: { type: DataTypes.JSON, allowNull: false }
+});
+
+// Categorias (Taxonomia)
 const Category = sequelize.define('Category', {
     name: { type: DataTypes.STRING, allowNull: false, unique: true },
-    slug: { type: DataTypes.STRING, unique: true }, // URL amigável
-    parentId: { type: DataTypes.INTEGER, allowNull: true } // Para categorias aninhadas
+    slug: { type: DataTypes.STRING, unique: true }
 });
 
-// 4. Tags
+// Tags (Taxonomia)
 const Tag = sequelize.define('Tag', {
     name: { type: DataTypes.STRING, allowNull: false, unique: true }
 });
 
+// --- TABELAS DE LIGAÇÃO (Many-to-Many) ---
 
-// --- MODELS DE VARIAÇÃO (COMPLEXIDADE) ---
+// Produto <-> Categoria
+const ProductCategory = sequelize.define('ProductCategory', {}, { timestamps: false });
 
-// 5. Atributo (Ex: Cor, Tamanho, Material)
-const Attribute = sequelize.define('Attribute', {
-    name: { type: DataTypes.STRING, allowNull: false, unique: true }
-});
-
-// 6. Valor do Atributo (Ex: Vermelho, Azul, Pequeno, Grande)
-const AttributeValue = sequelize.define('AttributeValue', {
-    value: { type: DataTypes.STRING, allowNull: false },
-    attributeId: { type: DataTypes.INTEGER, allowNull: false }
-});
-
-// 7. Variação (O SKU, que é um produto específico)
-const Variant = sequelize.define('Variant', {
-    sku: { type: DataTypes.STRING, unique: true, allowNull: true },
-    stock: { type: DataTypes.INTEGER, defaultValue: 0 },
-    priceAdjustment: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 }, // Preço extra/desconto
-    productId: { type: DataTypes.INTEGER, allowNull: false }
-});
+// Produto <-> Tag
+const ProductTag = sequelize.define('ProductTag', {}, { timestamps: false });
 
 
-// --- MODELS DE RELAÇÃO (N:M) ---
+// --- RELACIONAMENTOS ---
 
-// 8. Produto tem Múltiplas Categorias
-const ProductCategory = sequelize.define('ProductCategory', {});
+// Usuários e Endereços/Pedidos
+User.hasMany(Address); Address.belongsTo(User);
+User.hasMany(Order); Order.belongsTo(User);
 
-// 9. Produto tem Múltiplas Tags
-const ProductTag = sequelize.define('ProductTag', {});
+// Produto e Imagens
+Product.hasMany(ProductImage, { onDelete: 'CASCADE' });
+ProductImage.belongsTo(Product);
 
-// 10. Variação tem Múltiplos Valores de Atributo (Ex: SKU X = (Cor: Vermelho) + (Tamanho: P))
-const VariantAttributeValue = sequelize.define('VariantAttributeValue', {
-    variantId: { type: DataTypes.INTEGER, allowNull: false },
-    attributeValueId: { type: DataTypes.INTEGER, allowNull: false }
-});
+// Produto e Variações
+Product.hasMany(Variation, { onDelete: 'CASCADE' });
+Variation.belongsTo(Product);
 
-// --- MODELS DIVERSOS (Existentes) ---
-const User = sequelize.define('User', {/* ... */});
-const Address = sequelize.define('Address', {/* ... */});
-const ShippingRate = sequelize.define('ShippingRate', {/* ... */});
-const DeliveryCity = sequelize.define('DeliveryCity', {/* ... */});
-const Order = sequelize.define('Order', {/* ... */});
+// Produto e Categorias (M:N)
+Product.belongsToMany(Category, { through: ProductCategory });
+Category.belongsToMany(Product, { through: ProductCategory });
 
-
-// --- DEFINIÇÃO DOS RELACIONAMENTOS (ASSociações) ---
-
-// 1. Produtos
-Product.hasMany(ProductImage, { foreignKey: 'productId', onDelete: 'CASCADE' });
-ProductImage.belongsTo(Product, { foreignKey: 'productId' });
-
-Product.belongsToMany(Category, { through: ProductCategory, foreignKey: 'productId' });
-Category.belongsToMany(Product, { through: ProductCategory, foreignKey: 'categoryId' });
-
-Product.belongsToMany(Tag, { through: ProductTag, foreignKey: 'productId' });
-Tag.belongsToMany(Product, { through: ProductTag, foreignKey: 'tagId' });
-
-Product.hasMany(Variant, { foreignKey: 'productId', onDelete: 'CASCADE' });
-Variant.belongsTo(Product, { foreignKey: 'productId' });
-
-// 2. Atributos e Variações
-Attribute.hasMany(AttributeValue, { foreignKey: 'attributeId', onDelete: 'CASCADE' });
-AttributeValue.belongsTo(Attribute, { foreignKey: 'attributeId' });
-
-Variant.belongsToMany(AttributeValue, { through: VariantAttributeValue, foreignKey: 'variantId' });
-AttributeValue.belongsToMany(Variant, { through: VariantAttributeValue, foreignKey: 'attributeValueId' });
+// Produto e Tags (M:N)
+Product.belongsToMany(Tag, { through: ProductTag });
+Tag.belongsToMany(Product, { through: ProductTag });
 
 
-// --- OUTRAS ASSOCIAÇÕES (Existentes) ---
-User.hasMany(Address);
-Address.belongsTo(User);
-
-User.hasMany(Order);
-Order.belongsTo(User);
-
-
-// Sincronizar banco (Irá criar todas as novas tabelas)
+// Sincronizar banco
 sequelize.sync({ alter: true })
-    .then(() => console.log("📦 Banco de Dados Sincronizado. Novas tabelas criadas!"))
+    .then(() => console.log("📦 Banco de Dados Sincronizado"))
     .catch(err => console.error("Erro no DB:", err));
 
 module.exports = { 
-    sequelize, User, Address, ShippingRate, DeliveryCity, Order,
-    Product, ProductImage, Category, Tag, Variant, Attribute, AttributeValue,
-    ProductCategory, ProductTag, VariantAttributeValue // Exporta todos os modelos
+    sequelize, User, Address, Product, Order, ShippingRate, DeliveryCity,
+    ProductImage, Variation, Category, Tag, ProductCategory, ProductTag
 };
