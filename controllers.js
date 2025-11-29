@@ -2,6 +2,7 @@ const { User, Product, Order, ShippingRate, Address } = require('./db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const MercadoPago = require('mercadopago');
+const { Op } = require('sequelize'); // Usado para consultas Sequelize
 
 // Config Mercado Pago
 const client = new MercadoPago.MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
@@ -13,8 +14,14 @@ const controllers = {
             const { name, email, password } = req.body;
             const hashedPassword = await bcrypt.hash(password, 10);
             const user = await User.create({ name, email, password: hashedPassword });
-            res.json(user);
-        } catch (error) { res.status(500).json({ error: error.message }); }
+            res.status(201).json({ id: user.id, email: user.email, name: user.name });
+        } catch (error) { 
+            // 1062 é o código de erro para entrada duplicada no MySQL
+            if (error.original && error.original.code === 'ER_DUP_ENTRY') {
+                return res.status(400).json({ message: "Este e-mail já está cadastrado." });
+            }
+            res.status(500).json({ error: error.message }); 
+        }
     },
 
     login: async (req, res) => {
@@ -26,14 +33,13 @@ const controllers = {
             if (!valid) return res.status(400).json({ message: "Senha incorreta" });
 
             const token = jwt.sign({ id: user.id, isAdmin: user.isAdmin }, process.env.JWT_SECRET, { expiresIn: '1d' });
-            res.json({ token, user });
+            res.json({ token, user: { id: user.id, name: user.name, email: user.email, isAdmin: user.isAdmin } });
         } catch (error) { res.status(500).json({ error: error.message }); }
     },
 
     // --- PRODUTOS & ESTOQUE ---
     createProduct: async (req, res) => {
         try {
-            // A imagem vem do middleware Multer/Cloudinary
             const imageUrl = req.file ? req.file.path : null;
             const { title, price, stock, description, attributes } = req.body;
             
@@ -45,75 +51,112 @@ const controllers = {
                 imageUrl, 
                 attributes: JSON.parse(attributes || '{}')
             });
-            res.json(product);
+            res.status(201).json(product);
         } catch (error) { res.status(500).json({ error: error.message }); }
     },
 
     listProducts: async (req, res) => {
-        const products = await Product.findAll();
+        const products = await Product.findAll({ order: [['id', 'DESC']] });
         res.json(products);
     },
+    
+    // NOVO: Busca de produto por ID (necessário para o checkout dinâmico)
+    getProductById: async (req, res) => {
+        try {
+            const product = await Product.findByPk(req.params.id);
+            if (!product) {
+                return res.status(404).json({ message: "Produto não encontrado." });
+            }
+            res.json(product);
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    },
 
-    // --- FRETE E ENDEREÇO ---
+    // --- FRETE E ENDEREÇO (ADMIN) ---
     addShippingRate: async (req, res) => { // Admin define preço por cidade
         try {
             const { city, price } = req.body;
-            const rate = await ShippingRate.create({ city, price });
-            res.json(rate);
+            // Garante que a cidade seja salva em caixa alta para padronização na busca
+            const rate = await ShippingRate.create({ city: city.toUpperCase(), price }); 
+            res.status(201).json(rate);
         } catch (error) { res.status(500).json({ error: error.message }); }
     },
 
     calculateShipping: async (req, res) => {
-        // Busca preço baseado na cidade do usuário
-        const { city } = req.query; 
-        const rate = await ShippingRate.findOne({ where: { city } });
-        res.json({ city, price: rate ? rate.price : 'Consulte' });
+        // Busca preço baseado na cidade do usuário (case insensitive para melhor busca)
+        const city = req.query.city ? req.query.city.toUpperCase() : null;
+        if (!city) return res.status(400).json({ message: "Cidade é obrigatória para calcular o frete." });
+        
+        const rate = await ShippingRate.findOne({ 
+            where: { 
+                city: city,
+                active: true
+            } 
+        });
+        
+        const price = rate ? parseFloat(rate.price) : 'Consulte';
+        res.json({ city: req.query.city, price: price });
     },
 
     // --- CHECKOUT (MERCADO PAGO) ---
     createPreference: async (req, res) => {
         try {
-            const { items, city } = req.body; // items = [{id, quantity, unit_price, title}]
+            const userId = req.user.id; 
+            const { items, city } = req.body; 
             
-            // Lógica simples de frete
-            const shipping = await ShippingRate.findOne({ where: { city } });
+            // 1. CALCULAR FRETE
+            const shipping = await ShippingRate.findOne({ where: { city: city.toUpperCase() } });
             const shippingCost = shipping ? parseFloat(shipping.price) : 0;
 
-            const preference = new MercadoPago.Preference(client);
+            // 2. PREPARAR ITENS PARA MP
+            const mpItems = items.map(item => ({
+                title: item.title,
+                quantity: parseInt(item.quantity),
+                unit_price: parseFloat(item.price),
+                currency_id: 'BRL'
+            }));
             
-            const result = await preference.create({
+            // 3. CRIAR PREFERÊNCIA DE PAGAMENTO
+            const preferenceInstance = new MercadoPago.Preference(client);
+            
+            const result = await preferenceInstance.create({
                 body: {
-                    items: items.map(item => ({
-                        title: item.title,
-                        quantity: parseInt(item.quantity),
-                        unit_price: parseFloat(item.price),
-                        currency_id: 'BRL'
-                    })),
+                    items: mpItems,
                     shipments: {
                         cost: shippingCost,
                         mode: 'not_specified'
                     },
+                    // URLs de retorno após o pagamento (usando a URL do .env)
                     back_urls: {
-                        success: `${process.env.FRONTEND_URL}/success`,
-                        failure: `${process.env.FRONTEND_URL}/failure`,
-                        pending: `${process.env.FRONTEND_URL}/pending`
+                        success: `${process.env.FRONTEND_URL}/success.php`,
+                        failure: `${process.env.FRONTEND_URL}/failure.php`,
+                        pending: `${process.env.FRONTEND_URL}/pending.php`
                     },
                     auto_return: "approved",
+                    external_reference: `ORDER-${Date.now()}` // Para rastrear no seu sistema
                 }
             });
 
-            res.json({ id: result.id, init_point: result.init_point });
+            // 4. (OPCIONAL): Registrar Pedido no DB com status 'pending' antes de redirecionar...
+
+            res.json({ 
+                id: result.id, 
+                init_point: result.init_point, // Link para redirecionamento
+                shippingCost: shippingCost
+            });
         } catch (error) {
-            console.log(error);
-            res.status(500).json({ error: "Erro ao criar pagamento" });
+            console.error("Erro ao criar pagamento MP:", error);
+            res.status(500).json({ error: "Falha ao iniciar o checkout." });
         }
     },
 
-    // --- ESTATÍSTICAS ---
+    // --- ESTATÍSTICAS (ADMIN) ---
     getStats: async (req, res) => {
         const userCount = await User.count();
         const orderCount = await Order.count();
-        res.json({ users: userCount, orders: orderCount });
+        // Pode adicionar contagem de produtos, receita, etc.
+        res.json({ users: userCount, orders: orderCount, totalProducts: await Product.count() });
     }
 };
 
