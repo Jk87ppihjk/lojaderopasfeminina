@@ -1,11 +1,11 @@
 const { Sequelize, DataTypes } = require('sequelize');
 require('dotenv').config();
 
-// Conexão com o Banco SQL (Hostinger)
+// Conexão com o Banco SQL
 const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD, {
     host: process.env.DB_HOST,
     dialect: 'mysql',
-    logging: false, // Desativa logs de SQL no terminal para limpeza
+    logging: false, // Desativa logs de SQL
     pool: { max: 5, min: 0, acquire: 30000, idle: 10000 }
 });
 
@@ -37,6 +37,17 @@ const ShippingRate = sequelize.define('ShippingRate', {
     active: { type: DataTypes.BOOLEAN, defaultValue: true }
 });
 
+// Cidades de Entrega Disponíveis (Novo)
+const DeliveryCity = sequelize.define('DeliveryCity', {
+    city: { type: DataTypes.STRING, allowNull: false },
+    state: { type: DataTypes.STRING(2), allowNull: false }, // Ex: SP, RJ
+    neighborhood: { type: DataTypes.STRING, allowNull: true }, // Opcional (bairro)
+    available: { type: DataTypes.BOOLEAN, defaultValue: true }
+}, {
+    // Garante que a combinação cidade+estado+bairro seja única
+    indexes: [{ unique: true, fields: ['city', 'state', 'neighborhood'] }]
+});
+
 // Produtos
 const Product = sequelize.define('Product', {
     title: { type: DataTypes.STRING, allowNull: false },
@@ -62,9 +73,9 @@ Address.belongsTo(User);
 User.hasMany(Order);
 Order.belongsTo(User);
 
-// Sincronizar banco (Cria tabelas se não existirem)
+// Sincronizar banco (Cria tabelas se não existirem ou aplica alterações)
 sequelize.sync({ alter: true })
     .then(() => console.log("📦 Banco de Dados Sincronizado"))
     .catch(err => console.error("Erro no DB:", err));
 
-module.exports = { sequelize, User, Address, Product, Order, ShippingRate };
+module.exports = { sequelize, User, Address, Product, Order, ShippingRate, DeliveryCity };
