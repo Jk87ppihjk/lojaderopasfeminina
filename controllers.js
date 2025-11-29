@@ -1,8 +1,7 @@
-const { User, Product, Order, ShippingRate, Address } = require('./db');
+const { User, Product, Order, ShippingRate, Address, DeliveryCity } = require('./db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const MercadoPago = require('mercadopago');
-const { Op } = require('sequelize'); // Usado para consultas Sequelize
 
 // Config Mercado Pago
 const client = new MercadoPago.MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN });
@@ -16,7 +15,6 @@ const controllers = {
             const user = await User.create({ name, email, password: hashedPassword });
             res.status(201).json({ id: user.id, email: user.email, name: user.name });
         } catch (error) { 
-            // 1062 é o código de erro para entrada duplicada no MySQL
             if (error.original && error.original.code === 'ER_DUP_ENTRY') {
                 return res.status(400).json({ message: "Este e-mail já está cadastrado." });
             }
@@ -60,7 +58,6 @@ const controllers = {
         res.json(products);
     },
     
-    // NOVO: Busca de produto por ID (necessário para o checkout dinâmico)
     getProductById: async (req, res) => {
         try {
             const product = await Product.findByPk(req.params.id);
@@ -73,26 +70,53 @@ const controllers = {
         }
     },
 
+    // --- CIDADES DE ENTREGA (ADMIN) ---
+    addDeliveryCity: async (req, res) => {
+        try {
+            const { city, state, neighborhood } = req.body;
+            const newCity = await DeliveryCity.create({ 
+                city: city.toUpperCase(), 
+                state: state.toUpperCase(),
+                neighborhood: neighborhood ? neighborhood.toUpperCase() : null
+            });
+            res.status(201).json(newCity);
+        } catch (error) {
+            if (error.original && error.original.code === 'ER_DUP_ENTRY') {
+                return res.status(400).json({ message: "Esta Cidade/Bairro já foi cadastrada." });
+            }
+            res.status(500).json({ error: error.message });
+        }
+    },
+
+    // --- CIDADES DE ENTREGA (PÚBLICO) ---
+    getAvailableCities: async (req, res) => {
+        try {
+            const cities = await DeliveryCity.findAll({
+                where: { available: true },
+                attributes: ['city', 'state', 'neighborhood'],
+                order: [['state', 'ASC'], ['city', 'ASC']]
+            });
+            res.json(cities);
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    },
+
     // --- FRETE E ENDEREÇO (ADMIN) ---
-    addShippingRate: async (req, res) => { // Admin define preço por cidade
+    addShippingRate: async (req, res) => {
         try {
             const { city, price } = req.body;
-            // Garante que a cidade seja salva em caixa alta para padronização na busca
             const rate = await ShippingRate.create({ city: city.toUpperCase(), price }); 
             res.status(201).json(rate);
         } catch (error) { res.status(500).json({ error: error.message }); }
     },
 
     calculateShipping: async (req, res) => {
-        // Busca preço baseado na cidade do usuário (case insensitive para melhor busca)
         const city = req.query.city ? req.query.city.toUpperCase() : null;
         if (!city) return res.status(400).json({ message: "Cidade é obrigatória para calcular o frete." });
         
         const rate = await ShippingRate.findOne({ 
-            where: { 
-                city: city,
-                active: true
-            } 
+            where: { city: city, active: true } 
         });
         
         const price = rate ? parseFloat(rate.price) : 'Consulte';
@@ -127,22 +151,19 @@ const controllers = {
                         cost: shippingCost,
                         mode: 'not_specified'
                     },
-                    // URLs de retorno após o pagamento (usando a URL do .env)
                     back_urls: {
                         success: `${process.env.FRONTEND_URL}/success.php`,
                         failure: `${process.env.FRONTEND_URL}/failure.php`,
                         pending: `${process.env.FRONTEND_URL}/pending.php`
                     },
                     auto_return: "approved",
-                    external_reference: `ORDER-${Date.now()}` // Para rastrear no seu sistema
+                    external_reference: `ORDER-${Date.now()}`
                 }
             });
 
-            // 4. (OPCIONAL): Registrar Pedido no DB com status 'pending' antes de redirecionar...
-
             res.json({ 
                 id: result.id, 
-                init_point: result.init_point, // Link para redirecionamento
+                init_point: result.init_point,
                 shippingCost: shippingCost
             });
         } catch (error) {
@@ -155,7 +176,6 @@ const controllers = {
     getStats: async (req, res) => {
         const userCount = await User.count();
         const orderCount = await Order.count();
-        // Pode adicionar contagem de produtos, receita, etc.
         res.json({ users: userCount, orders: orderCount, totalProducts: await Product.count() });
     }
 };
