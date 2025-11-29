@@ -5,7 +5,8 @@ require('dotenv').config();
 
 // Importação dos Módulos Locais (Todos na raiz)
 const { verifyToken, verifyAdmin } = require('./middleware_auth');
-const upload = require('./config_upload');
+// O middleware de upload agora aceita múltiplas imagens no campo 'images'
+const upload = require('./config_upload'); 
 const controllers = require('./controllers');
 const { sequelize } = require('./db'); // Importa o sequelize explicitamente
 const seedAdmin = require('./seed_admin'); // Lógica de criação do Admin
@@ -26,7 +27,8 @@ app.post('/api/login', controllers.login);
 // 2. Produtos (Listagem é Pública, Criação é Admin)
 app.get('/api/products', controllers.listProducts);
 app.get('/api/products/:id', controllers.getProductById);
-app.post('/api/products', verifyAdmin, upload.single('image'), controllers.createProduct);
+// Rota de criação agora usa upload.array para MULTIPLAS IMAGENS
+app.post('/api/products', verifyAdmin, upload.array('images', 10), controllers.createProduct);
 
 // 3. Cidades de Entrega (Rotas Nova)
 app.get('/api/public/delivery/cities', controllers.getAvailableCities); // Pública
