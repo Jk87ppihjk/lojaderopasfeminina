@@ -5,7 +5,7 @@ require('dotenv').config();
 
 // Importação dos Módulos Locais (Todos na raiz)
 const { verifyToken, verifyAdmin } = require('./middleware_auth');
-// O middleware de upload agora aceita múltiplas imagens no campo 'images'
+// O middleware de upload agora aceita múltiplas imagens no campo 'uploaded_images'
 const upload = require('./config_upload'); 
 const controllers = require('./controllers');
 const { sequelize } = require('./db'); // Importa o sequelize explicitamente
@@ -21,28 +21,27 @@ app.use(morgan('dev')); // Logs de requisição
 // --- ROTAS DA API ---
 
 // 1. Autenticação (Público)
-// Linha 24 (Onde o erro estava apontando)
 app.post('/api/register', controllers.register); 
 app.post('/api/login', controllers.login);
 
 // 2. Produtos (Listagem é Pública, Criação é Admin)
 app.get('/api/products', controllers.listProducts);
 app.get('/api/products/:id', controllers.getProductById);
-// Rota de criação agora usa upload.array para MULTIPLAS IMAGENS
-app.post('/api/products', verifyAdmin, upload.array('images', 10), controllers.createProduct);
+// CORREÇÃO AQUI: Multer agora espera 'uploaded_images'
+app.post('/api/products', verifyAdmin, upload.array('uploaded_images', 10), controllers.createProduct);
 
-// 3. Cidades de Entrega (Rotas Nova)
-app.get('/api/public/delivery/cities', controllers.getAvailableCities); // Pública
-app.post('/api/admin/delivery/city', verifyAdmin, controllers.addDeliveryCity); // Admin
+// 3. Cidades de Entrega
+app.get('/api/public/delivery/cities', controllers.getAvailableCities); 
+app.post('/api/admin/delivery/city', verifyAdmin, controllers.addDeliveryCity); 
 
-// 4. Fretes (Admin cadastra, Usuário consulta)
+// 4. Fretes
 app.post('/api/shipping/add', verifyAdmin, controllers.addShippingRate);
 app.get('/api/shipping/calc', controllers.calculateShipping);
 
-// 5. Carrinho e Pagamento (Requer Token do Usuário logado)
+// 5. Carrinho e Pagamento
 app.post('/api/checkout', verifyToken, controllers.createPreference);
 
-// 6. Admin Dashboard (Requer Token de Admin)
+// 6. Admin Dashboard
 app.get('/api/admin/stats', verifyAdmin, controllers.getStats);
 
 // Rota padrão
@@ -66,5 +65,5 @@ sequelize.sync().then(async () => {
     });
 }).catch(err => {
     console.error("❌ Falha crítica ao conectar ao DB:", err);
-    process.exit(1); // Encerra o processo se o DB falhar
+    process.exit(1);
 });
