@@ -15,6 +15,7 @@
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.0",
     "mysql2": "^3.6.0",
-    "cloudinary": "^1.41.0"
+    "cloudinary": "^1.41.0",
+    "bcryptjs": "^2.4.3"
   }
 }

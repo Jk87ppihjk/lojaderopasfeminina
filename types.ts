@@ -5,6 +5,9 @@ export interface Product {
   category: string;
   image: string;
   description: string;
+  sizes?: string; // "P, M, G"
+  colors?: string; // "Red, Black"
+  stock?: number;
 }
 
 export interface CartItem extends Product {
@@ -21,5 +24,7 @@ export interface ChatMessage {
 export enum ViewState {
   HOME = 'HOME',
   CATALOG = 'CATALOG',
-  CHECKOUT = 'CHECKOUT'
+  CHECKOUT = 'CHECKOUT',
+  LOGIN = 'LOGIN',
+  ADMIN_DASHBOARD = 'ADMIN_DASHBOARD'
 }

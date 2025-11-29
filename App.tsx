@@ -3,8 +3,10 @@ import { Header } from './components/Header';
 import { ProductCard } from './components/ProductCard';
 import { CartSidebar } from './components/CartSidebar';
 import { ChatBot } from './components/ChatBot';
+import { LoginPanel } from './components/LoginPanel';
+import { AdminPanel } from './components/AdminPanel';
 import { Product, CartItem, ViewState } from './types';
-import { ArrowRight, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowRight, CheckCircle, Loader2, AlertCircle, User } from 'lucide-react';
 import { api } from './services/api';
 import { geminiService } from './services/geminiService';
 
@@ -21,6 +23,9 @@ function App() {
   const [checkoutError, setCheckoutError] = useState('');
 
   useEffect(() => {
+    // Check if on login route or admin route via simple state persistence check or logic
+    // For now, we default to HOME.
+    
     const loadProducts = async () => {
       setIsLoadingProducts(true);
       const data = await api.getProducts();
@@ -29,7 +34,7 @@ function App() {
       setIsLoadingProducts(false);
     };
     loadProducts();
-  }, []);
+  }, [viewState]); // Reload products when view changes (e.g. returning from admin)
 
   const addToCart = (product: Product) => {
     setCart(prev => {
@@ -82,10 +87,8 @@ function App() {
       const response = await api.createOrder(customerData, cart);
       
       if (response.paymentUrl) {
-         // Redirect to external payment (MercadoPago/AbacatePay)
          window.location.href = response.paymentUrl;
       } else {
-        // Fallback for mock/test
         setOrderComplete(true);
         setCart([]);
         setTimeout(() => {
@@ -100,6 +103,16 @@ function App() {
       setIsProcessingOrder(false);
     }
   };
+
+  // --- Views ---
+
+  if (viewState === ViewState.LOGIN) {
+    return <LoginPanel onLoginSuccess={() => setViewState(ViewState.ADMIN_DASHBOARD)} setViewState={setViewState} />;
+  }
+
+  if (viewState === ViewState.ADMIN_DASHBOARD) {
+    return <AdminPanel setViewState={setViewState} />;
+  }
 
   const renderHome = () => (
     <div className="animate-fadeIn">
@@ -123,14 +136,23 @@ function App() {
               Descubra a coleção exclusiva que une elegância atemporal e poder moderno. 
               Peças desenhadas para mulheres que não temem destacar-se.
             </p>
-            <button 
-              onClick={() => setViewState(ViewState.CATALOG)}
-              className="bg-rosy-red hover:bg-red-700 text-white px-8 py-4 text-lg font-medium rounded-sm transition-all duration-300 flex items-center gap-2 group"
-            >
-              Ver Coleção
-              <ArrowRight className="group-hover:translate-x-1 transition-transform" />
-            </button>
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setViewState(ViewState.CATALOG)}
+                className="bg-rosy-red hover:bg-red-700 text-white px-8 py-4 text-lg font-medium rounded-sm transition-all duration-300 flex items-center gap-2 group"
+              >
+                Ver Coleção
+                <ArrowRight className="group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
           </div>
+        </div>
+        
+        {/* Admin Login Link Footer */}
+        <div className="absolute bottom-4 right-4 z-10">
+           <button onClick={() => setViewState(ViewState.LOGIN)} className="text-xs text-gray-500 hover:text-white flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity">
+              <User size={12}/> Área Lojista
+           </button>
         </div>
       </div>
 
