@@ -21,7 +21,8 @@ app.use(morgan('dev')); // Logs de requisição
 // --- ROTAS DA API ---
 
 // 1. Autenticação (Público)
-app.post('/api/register', controllers.register);
+// Linha 24 (Onde o erro estava apontando)
+app.post('/api/register', controllers.register); 
 app.post('/api/login', controllers.login);
 
 // 2. Produtos (Listagem é Pública, Criação é Admin)
