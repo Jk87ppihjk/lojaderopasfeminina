@@ -1,69 +1,51 @@
+// server.js (ou o arquivo principal do seu backend)
 const express = require('express');
-const cors = require('cors');
-const morgan = require('morgan');
-require('dotenv').config();
-
-// Importação dos Módulos Locais (Todos na raiz)
-const { verifyToken, verifyAdmin } = require('./middleware_auth');
-// O middleware de upload agora aceita múltiplas imagens no campo 'uploaded_images'
-const upload = require('./config_upload'); 
-const controllers = require('./controllers');
-const { sequelize } = require('./db'); // Importa o sequelize explicitamente
-const seedAdmin = require('./seed_admin'); // Lógica de criação do Admin
+const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
+const jwt = require('jsonwebtoken');
+require('dotenv').config(); // Para carregar suas variáveis do .env
 
 const app = express();
+const port = process.env.PORT || 3000;
 
-// Middlewares Globais
-app.use(cors());
-app.use(express.json()); // Habilita o bodyParser para JSON
-app.use(morgan('dev')); // Logs de requisição
+// Middleware para JSON e URL-encoded data
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// --- ROTAS DA API ---
-
-// 1. Autenticação (Público)
-app.post('/api/register', controllers.register); 
-app.post('/api/login', controllers.login);
-
-// 2. Produtos (Listagem é Pública, Criação é Admin)
-app.get('/api/products', controllers.listProducts);
-app.get('/api/products/:id', controllers.getProductById);
-// CORREÇÃO AQUI: Multer agora espera 'uploaded_images'
-app.post('/api/products', verifyAdmin, upload.array('uploaded_images', 10), controllers.createProduct);
-
-// 3. Cidades de Entrega
-app.get('/api/public/delivery/cities', controllers.getAvailableCities); 
-app.post('/api/admin/delivery/city', verifyAdmin, controllers.addDeliveryCity); 
-
-// 4. Fretes
-app.post('/api/shipping/add', verifyAdmin, controllers.addShippingRate);
-app.get('/api/shipping/calc', controllers.calculateShipping);
-
-// 5. Carrinho e Pagamento
-app.post('/api/checkout', verifyToken, controllers.createPreference);
-
-// 6. Admin Dashboard
-app.get('/api/admin/stats', verifyAdmin, controllers.getStats);
-
-// Rota padrão
-app.get('/', (req, res) => {
-    res.send('API Loja Online Rodando. Status OK.');
+// --- CONFIGURAÇÃO DO CLOUDINARY ---
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// --- INICIAR SERVIDOR ---
-const PORT = process.env.PORT || 3000;
+// --- CONFIGURAÇÃO DO MULTER (sem salvar o arquivo, apenas em buffer) ---
+// O destino 'memoryStorage' faz com que o arquivo fique na memória antes de ser enviado
+// para o Cloudinary.
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
 
-// Sincroniza o DB, cria o Admin e então inicia o servidor
-sequelize.sync().then(async () => {
-    console.log("📦 Banco de Dados Conectado e Sincronizado!");
-    
-    // Roda a verificação/criação do Admin
-    await seedAdmin(); 
+// --- MIDDLEWARE DE AUTENTICAÇÃO (AuthAdmin) ---
+// (Mantemos a função diretamente aqui na raiz)
+const authAdmin = (req, res, next) => {
+    const token = req.header('Authorization')?.replace('Bearer ', '');
 
-    app.listen(PORT, () => {
-        console.log(`🔥 Servidor rodando na porta ${PORT}`);
-        console.log(`🔗 Frontend esperado em: ${process.env.FRONTEND_URL}`);
-    });
-}).catch(err => {
-    console.error("❌ Falha crítica ao conectar ao DB:", err);
-    process.exit(1);
-});
+    if (!token) return res.status(401).send('Acesso negado. Token não fornecido.');
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.usuario = decoded; 
+        
+        // Verificação de 'admin' (Assumindo que o token tem um campo 'role')
+        if (req.usuario.role !== 'admin') {
+             return res.status(403).send('Acesso negado. Permissão insuficiente.');
+        }
+
+        next();
+    } catch (ex) {
+        res.status(400).send('Token inválido.');
+    }
+};
+
+// ... Inicie o servidor no final do arquivo ...
+// app.listen(port, () => console.log(`Backend rodando na porta ${port}`));
